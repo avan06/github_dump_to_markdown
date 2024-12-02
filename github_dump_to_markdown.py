@@ -5,27 +5,33 @@ If you already have a GitHub Access Token, you likely don’t need to install th
 
 Usage:
 $ gh auth login
-$ python github_dump.py --token $(gh auth token) \
+$ python github_dump_to_markdown.py --token $(gh auth token) \
     --owner intel \
     --repo dffml \
     --numbers 1234 1235 1240-1290 \
     --dumptype discussion
 
+$ github_dump_to_markdown.py [-h] [-t TOKEN] [--owner OWNER] [--repo REPO] [--url URL] -n NUMBERS [NUMBERS ...]
+                                  [--api API] [-o OUTPUT_DIR] [-dt DUMPTYPE]
+
 options:
-  --token      GitHub Access Token: If this option is not provided, the program will attempt to obtain a GitHub authentication token
-               using the `gh auth login` command from the GitHub CLI (requires the `gh` CLI to be installed).
-  --owner      GitHub Repository Owner
-  --repo       GitHub Repository Name
-  --numbers    GitHub Discussion or PullRequest or Issue Numbers (space-separated, supports ranges like '1000-1200')
-  --api        GitHub GraphQL endpoint, default https://api.github.com/graphql
-  --output-dir Output directory for markdown files, default docs
-  --dumptype   Enter discussion or pullRequest or issue, default discussion
+  -h, --help       show this help message and exit
+  -t, --token      GitHub Access Token: If this parameter is not provided, the program will attempt to obtain a
+                   GitHub authentication token using the `gh auth login` command from the GitHub CLI (requires the `gh` CLI to be installed).
+  --owner          GitHub Repository Owner, required
+  --repo           GitHub Repository Name, required
+  --url            GitHub Repository Url, If `--url` is provided, `--owner` and `--repo` are not required
+  -n, --numbers    GitHub Discussion or PullRequest or Issue Numbers (space-separated, supports ranges like '1000-1200')
+  --api            GitHub GraphQL endpoint, default https://api.github.com/graphql
+  -o, --output-dir Output directory for markdown files, default docs
+  -dt, --dumptype  Enter discussion or pullRequest or issue, default discussion
 
 Credits & Reference
 https://github.com/intel/dffml/blob/main/scripts/dump_discussion.py
 https://github.com/intel/dffml/blob/main/scripts/discussion_dump_to_markdown.py
 https://github.com/orgs/community/discussions/3315#discussioncomment-3094387
 """
+import sys
 import re
 import asyncio
 import aiohttp
@@ -36,6 +42,7 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import List
 from datetime import datetime
+from urllib.parse import urlparse
 
 @dataclass
 class Reply:
@@ -353,6 +360,7 @@ def output_markdown(queryResult: QueryResult, output_directory: pathlib.Path, nu
     print(f"Created file: {markdown_path}")
 
 async def main():
+    parser = argparse.ArgumentParser(description="Fetch and dump GitHub discussions or pullRequests or issues data")
     def get_gh_token():
         """
         Retrieve the GitHub authentication token, compatible with both Windows and Linux.
@@ -363,9 +371,31 @@ async def main():
             result = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, check=True)
             return result.stdout.strip()
         except subprocess.CalledProcessError as e:
-            print("Failed to retrieve GitHub Token. Please ensure you are logged in using GitHub CLI (gh auth login).")
-            print(f"Error message: {e.stderr.strip()}")
-            raise
+            print("\nFailed to retrieve GitHub Token. Please ensure you are logged in using GitHub CLI (gh auth login).\n")
+            print(f"Error message: {e.stderr.strip()}\n")
+            parser.print_help()
+            sys.exit(1)
+
+    def parse_github_url(url):
+        # Parse the URL into components using urlparse
+        parsed_url = urlparse(url)
+    
+        # Check if the domain is GitHub
+        if "github.com" not in parsed_url.netloc:
+            print(f"\nInvalid GitHub URL `--url`: {url}\n")
+            parser.print_help()
+            sys.exit(1)
+    
+        # Split the path to extract the owner and repository
+        path_parts = parsed_url.path.strip("/").split("/")
+        if len(path_parts) < 2:
+            print(f"\nInvalid GitHub repository URL `--url`: {url}\n")
+            parser.print_help()
+            sys.exit(1)
+    
+        owner = path_parts[0]
+        repo = path_parts[1]
+        return owner, repo
 
     def parse_range(value):
         """Parse a single value or a range (e.g., '1000-1200')"""
@@ -380,18 +410,28 @@ async def main():
         except ValueError:
             raise argparse.ArgumentTypeError(f"Invalid input: {value}")
 
-    parser = argparse.ArgumentParser(description="Fetch and dump GitHub discussion or pullRequest or issue data")
-    parser.add_argument("--token", help="GitHub Access Token: If this parameter is not provided, the program will attempt to obtain a GitHub authentication token using the `gh auth login` command from the GitHub CLI (requires the `gh` CLI to be installed).")
-    parser.add_argument("--owner", help="GitHub Repository Owner", required=True)
-    parser.add_argument("--repo", help="GitHub Repository Name", required=True)
-    parser.add_argument("--numbers", nargs='+', type=parse_range, help="GitHub Discussion or PullRequest or Issue Numbers (space-separated, supports ranges like '1000-1200')", required=True)
+    parser.add_argument("-t", "--token", help="GitHub Access Token: If this parameter is not provided, the program will attempt to obtain a GitHub authentication token using the `gh auth login` command from the GitHub CLI (requires the `gh` CLI to be installed).")
+    parser.add_argument("--owner", help="GitHub Repository Owner, required")
+    parser.add_argument("--repo", help="GitHub Repository Name, required")
+    parser.add_argument("--url", help="GitHub Repository Url, If `--url` is provided, `--owner` and `--repo` are not required")
+    parser.add_argument("-n", "--numbers", nargs='+', type=parse_range, help="GitHub Discussion or PullRequest or Issue Numbers (space-separated, supports ranges like '1000-1200')", required=True)
     parser.add_argument("--api", help="GitHub GraphQL endpoint, default https://api.github.com/graphql", default="https://api.github.com/graphql")
-    parser.add_argument("--output-dir", help="Output directory for markdown files, default docs", default="docs")
-    parser.add_argument("--dumptype", help="Enter discussion or pullRequest or issue, default discussion", default="discussion")
+    parser.add_argument("-o", "--output-dir", help="Output directory for markdown files, default docs", default="docs")
+    parser.add_argument("-dt", "--dumptype", help="Enter discussion or pullRequest or issue, default discussion", default="discussion")
     args = parser.parse_args()
+
     if not args.token:
         # Attempt to obtain a GitHub authentication token using the gh auth login command from the GitHub CLI 
         args.token = get_gh_token()
+
+    if args.url:
+        args.owner, args.repo = parse_github_url(args.url)
+
+    if not args.owner or not args.repo:
+        print("\nError: `--owner` and `--repo` are required options, or you can specify `--url` to automatically retrieve the owner and repo.\n")
+        parser.print_help()
+        sys.exit(1)
+
     # Convert discussion numbers to flatten list
     numbers = [item for sublist in args.numbers for item in sublist]
     # Convert output directory to Path object

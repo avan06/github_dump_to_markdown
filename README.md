@@ -14,16 +14,19 @@ $ python github_dump.py --token $(gh auth token) \
 
 ## options
 
--  --token  
+-  -t, --token  
 GitHub Access Token  
 If this option is not provided, the program will attempt to obtain a GitHub authentication token using the `gh auth login` command from the GitHub CLI (requires the `gh` CLI to be installed).  
 -  --owner    
-GitHub Repository Owner  
+GitHub Repository Owner, required  
 
 -  --repo    
-GitHub Repository Name  
+GitHub Repository Name, required  
 
--  --numbers  
+- --url
+GitHub Repository Url, If `--url` is provided, `--owner` and `--repo` are not required  
+
+-  -n, --numbers  
 GitHub Discussion or PullRequest or Issue Numbers (space-separated, supports ranges like '1000-1200')  
 
 -  --api  
