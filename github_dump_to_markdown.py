@@ -220,7 +220,7 @@ async def fetch_github_data(session, graphql_url, token, owner, repo, number, du
 
             # Check if discussion exists
             if not result.get("data", {}).get("repository", {}).get(dumptype):
-                # print(f"Discussion {number} not found.")
+                # print(f"Discussion {number:03} not found.")
                 if result.get("errors", {}):
                     if result["errors"][0].get("type", {}) != "NOT_FOUND":
                         print("Error: " + str(result["errors"]))
@@ -277,7 +277,7 @@ async def fetch_github_data(session, graphql_url, token, owner, repo, number, du
         )
     except Exception as e:
         print(traceback.format_exc())
-        print(f"Error fetching {dumptype} {number}: {e}")
+        print(f"Error fetching {dumptype} {number:03}: {e}")
         return None
 
 def output_markdown(queryResult: QueryResult, output_directory: pathlib.Path, number: int):
@@ -313,7 +313,7 @@ def output_markdown(queryResult: QueryResult, output_directory: pathlib.Path, nu
                 return truncated[:last_space].rstrip("_- ")
             return truncated
         # Start with discussion number
-        base_filename = f"{dumptype}{number}_"
+        base_filename = f"{dumptype}{number:03}_"
     
         # Add sanitized title
         title_part = sanitize_filename(title.split('\n')[0])
@@ -465,7 +465,7 @@ async def main():
                     discussions_failed += 1
             except Exception as e:
                 print(traceback.format_exc())
-                print(f"Error processing discussion {number}: {e}")
+                print(f"Error processing discussion {number:03}: {e}")
                 discussions_failed += 1
 
         # Print summary
