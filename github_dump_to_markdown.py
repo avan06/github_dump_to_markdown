@@ -337,15 +337,13 @@ async def fetch_github_data(session, graphql_url, token, owner, repo, dumptype, 
     response = await session.post(graphql_url, headers=headers, json={"query": query, "variables": variables})
     result = await response.json()
 
-    if result.get("errors"):
-      print("GraphQL Errors: " + str(result["errors"]))
+    if result.get("errors", {}):
+      if result["errors"][0].get("type", {}) != "NOT_FOUND":
+        print("GraphQL Errors: " + str(result["errors"]))
       return None
 
     if dumptype in ["discussion", "pullRequest", "issue"]:
       if not result.get("data", {}).get("repository", {}).get(dumptype):
-        if result.get("errors", {}):
-          if result["errors"][0].get("type", {}) != "NOT_FOUND":
-            print("Error: " + str(result["errors"]))
         return None
 
       queryResult = result["data"]["repository"][dumptype]
@@ -637,6 +635,8 @@ async def main():
     if len(path_parts) > 2:
       if path_parts[2] == "issues":
         dumptype = "issue"
+      elif path_parts[2] == "pulls":
+        dumptype = "pullRequest"
       elif path_parts[2] == "pull":
         dumptype = "pullRequest"
       elif path_parts[2] == "discussions":
